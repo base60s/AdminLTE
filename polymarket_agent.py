@@ -3,11 +3,11 @@ import schedule
 import time
 from datetime import datetime
 from config import Config
-from polymarket_client import PolymarketClient
-from google_sheets_client import GoogleSheetsClient
+from web_scraper_client import PolymarketWebScraper
+from markdown_writer import MarkdownWriter
 
 class PolymarketPriceAgent:
-    """Main agent class for monitoring Polymarket prices and updating Google Sheets"""
+    """Main agent class for monitoring Polymarket prices and writing to markdown files"""
     
     def __init__(self):
         self.setup_logging()
@@ -22,8 +22,8 @@ class PolymarketPriceAgent:
             raise
         
         # Initialize clients
-        self.polymarket_client = PolymarketClient()
-        self.google_sheets_client = GoogleSheetsClient()
+        self.polymarket_scraper = PolymarketWebScraper()
+        self.markdown_writer = MarkdownWriter()
         
         self.logger.info("Polymarket Price Agent initialized successfully")
     
@@ -39,29 +39,33 @@ class PolymarketPriceAgent:
         )
     
     def update_price_data(self):
-        """Fetch current price data and update Google Sheets"""
+        """Fetch current price data and update markdown file"""
         try:
             self.logger.info("Starting price data update...")
             
-            # Fetch price data from Polymarket
-            # Use market slug if available, otherwise use event slug
-            slug = Config.POLYMARKET_MARKET_SLUG or Config.POLYMARKET_EVENT_SLUG
-            price_data = self.polymarket_client.get_simplified_price_data(slug)
-            
-            if not price_data:
-                self.logger.error("Failed to fetch price data from Polymarket")
+            # Get the URL to scrape
+            url = Config.POLYMARKET_URL
+            if not url:
+                self.logger.error("No Polymarket URL configured")
                 return False
             
-            self.logger.info(f"Fetched price data: {price_data}")
+            # Scrape price data from Polymarket webpage
+            market_data = self.polymarket_scraper.extract_market_data(url)
             
-            # Write data to Google Sheets
-            success = self.google_sheets_client.write_price_data(price_data)
+            if not market_data:
+                self.logger.error("Failed to scrape price data from Polymarket")
+                return False
+            
+            self.logger.info(f"Scraped market data: {market_data.get('title', 'Unknown')}")
+            
+            # Write data to markdown file
+            success = self.markdown_writer.write_market_data(market_data)
             
             if success:
-                self.logger.info("Successfully updated Google Sheets with price data")
+                self.logger.info("Successfully updated markdown file with price data")
                 return True
             else:
-                self.logger.error("Failed to update Google Sheets")
+                self.logger.error("Failed to update markdown file")
                 return False
                 
         except Exception as e:
@@ -91,9 +95,8 @@ class PolymarketPriceAgent:
         """Start the monitoring process with scheduled updates"""
         self.logger.info(f"Starting Polymarket price monitoring...")
         self.logger.info(f"Update interval: {Config.UPDATE_INTERVAL_MINUTES} minutes")
-        slug = Config.POLYMARKET_MARKET_SLUG or Config.POLYMARKET_EVENT_SLUG
-        self.logger.info(f"Market/Event Slug: {slug}")
-        self.logger.info(f"Google Sheet ID: {Config.GOOGLE_SHEET_ID}")
+        self.logger.info(f"Target URL: {Config.POLYMARKET_URL}")
+        self.logger.info(f"Output file: {Config.MARKDOWN_FILE_PATH}")
         
         # Schedule the job
         schedule.every(Config.UPDATE_INTERVAL_MINUTES).minutes.do(self.run_scheduled_update)
@@ -124,17 +127,17 @@ class PolymarketPriceAgent:
     def get_status(self):
         """Get current status of the agent"""
         try:
-            # Check last update time from Google Sheets
-            last_update = self.google_sheets_client.get_last_update_time()
+            # Check last update time from markdown file
+            last_update = self.markdown_writer.get_last_update_time()
+            file_stats = self.markdown_writer.get_file_stats()
             
-            slug = Config.POLYMARKET_MARKET_SLUG or Config.POLYMARKET_EVENT_SLUG
             status = {
                 "agent_running": True,
                 "last_update": last_update.isoformat() if last_update else None,
-                "market_slug": Config.POLYMARKET_MARKET_SLUG,
-                "event_slug": Config.POLYMARKET_EVENT_SLUG,
-                "current_slug": slug,
-                "update_interval_minutes": Config.UPDATE_INTERVAL_MINUTES
+                "target_url": Config.POLYMARKET_URL,
+                "output_file": Config.MARKDOWN_FILE_PATH,
+                "update_interval_minutes": Config.UPDATE_INTERVAL_MINUTES,
+                "file_stats": file_stats
             }
             
             self.logger.info(f"Agent status: {status}")

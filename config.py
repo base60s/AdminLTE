@@ -7,12 +7,14 @@ load_dotenv()
 class Config:
     """Configuration class for the Polymarket Price Agent"""
     
-    # Google Sheets Configuration
-    GOOGLE_CREDENTIALS_FILE = os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
-    GOOGLE_SHEET_ID = os.getenv('GOOGLE_SHEET_ID')
-    GOOGLE_SHEET_NAME = os.getenv('GOOGLE_SHEET_NAME', 'Polymarket Prices')
+    # Markdown Output Configuration
+    MARKDOWN_FILE_PATH = os.getenv('MARKDOWN_FILE_PATH', './data/polymarket_monitor.md')
+    MAX_MARKDOWN_ENTRIES = int(os.getenv('MAX_MARKDOWN_ENTRIES', 50))
     
     # Polymarket Configuration
+    POLYMARKET_URL = os.getenv('POLYMARKET_URL')
+    
+    # Legacy API configuration (not used in web scraping mode)
     POLYMARKET_EVENT_SLUG = os.getenv('POLYMARKET_EVENT_SLUG')
     POLYMARKET_MARKET_SLUG = os.getenv('POLYMARKET_MARKET_SLUG')
     POLYMARKET_GAMMA_API_BASE = 'https://gamma-api.polymarket.com'
@@ -30,14 +32,14 @@ class Config:
         """Validate that all required configuration is present"""
         missing_configs = []
         
-        if not cls.GOOGLE_SHEET_ID:
-            missing_configs.append('GOOGLE_SHEET_ID')
+        if not cls.POLYMARKET_URL:
+            missing_configs.append('POLYMARKET_URL')
         
-        if not cls.POLYMARKET_EVENT_SLUG and not cls.POLYMARKET_MARKET_SLUG:
-            missing_configs.append('POLYMARKET_EVENT_SLUG or POLYMARKET_MARKET_SLUG')
-        
-        if not os.path.exists(cls.GOOGLE_CREDENTIALS_FILE):
-            missing_configs.append(f'Google credentials file: {cls.GOOGLE_CREDENTIALS_FILE}')
+        # Validate that the markdown file path directory can be created
+        try:
+            os.makedirs(os.path.dirname(cls.MARKDOWN_FILE_PATH), exist_ok=True)
+        except Exception as e:
+            missing_configs.append(f'Cannot create markdown file directory: {e}')
         
         if missing_configs:
             raise ValueError(f"Missing required configuration: {', '.join(missing_configs)}")
